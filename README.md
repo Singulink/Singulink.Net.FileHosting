@@ -4,7 +4,7 @@
 [![View nuget packages](https://img.shields.io/nuget/v/Singulink.Net.FileHosting.svg)](https://www.nuget.org/packages/Singulink.Net.FileHosting/)
 [![Build and Test](https://github.com/Singulink/Singulink.Net.FileHosting/workflows/build%20and%20test/badge.svg)](https://github.com/Singulink/Singulink.Net.FileHosting/actions?query=workflow%3A%22build+and+test%22)
 
-**Singulink.Net.FileHosting** provides file and image storage functionality (i.e. max image size resizing and thumbnail generation) suitable for hosting scenarios where users upload files. Images can be pre-validated prior to loading image data to ensure that easy DoS attacks can't be executed by crafting small highly compress files (i.e. JPEG files) that require a large amount of memory to decode.
+**Singulink.Net.FileHosting** provides file and image storage functionality like image resizing and thumbnail generation suitable for hosting scenarios where users upload files. Source image parameters like its size can be validated prior to fully loading and processing the image to ensure that easy DoS attacks can't be executed via specially crafted highly compressed files that require a large amount of memory to decode. For example, it is possible to create a massive resolution JPEG file that is only 2MB in size but allocates 1GB+ memory when loaded.
 
 ### About Singulink
 
