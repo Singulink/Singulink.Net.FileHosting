@@ -38,29 +38,29 @@ namespace Singulink.Net.FileHosting.Tests
             using var stream = _imageFile.OpenStream();
 
             var id = _host.Add(stream, new ImageOptions() {
-                Size = new Size(300, 300),
+                ImageEditor = ImageEditors.MaxSize(new Size(300, 300), Color.White),
                 Quality = 100,
             });
 
             _host.AddSize(id, "75", new ImageOptions() {
-                Size = new Size(300, 300),
+                ImageEditor = ImageEditors.MaxSize(new Size(300, 300), Color.White),
                 Quality = 75,
             });
 
             _host.AddSize(id, "50", new ImageOptions() {
-                Size = new Size(300, 300),
+                ImageEditor = ImageEditors.MaxSize(new Size(300, 300), Color.White),
                 Quality = 50,
             });
 
             _host.AddSize(id, "25", new ImageOptions() {
-                Size = new Size(300, 300),
+                ImageEditor = ImageEditors.MaxSize(new Size(300, 300), Color.White),
                 Quality = 25,
             });
 
-            var i100 = _host.GetImagePath(id);
-            var i75 = _host.GetImagePath(id, "75");
-            var i50 = _host.GetImagePath(id, "50");
-            var i25 = _host.GetImagePath(id, "25");
+            var i100 = _host.GetAbsoluteImagePath(id);
+            var i75 = _host.GetAbsoluteImagePath(id, "75");
+            var i50 = _host.GetAbsoluteImagePath(id, "50");
+            var i25 = _host.GetAbsoluteImagePath(id, "25");
 
             i100.Length.ShouldBeGreaterThan(i75.Length);
             i75.Length.ShouldBeGreaterThan(i50.Length);
@@ -79,116 +79,135 @@ namespace Singulink.Net.FileHosting.Tests
             Assert.ThrowsException<ArgumentException>(() => _host.AddSize(id, "original", new ImageOptions()));
 
             _host.AddSize(id, "enlarged1", new ImageOptions() {
-                Size = new Size(2000, 2000),
+                ImageEditor = ImageEditors.MaxSize(new Size(2000, 2000), Color.White),
             });
 
             _host.AddSize(id, "enlarged2", new ImageOptions() {
-                Size = new Size(2048, 1536),
-                ResizeMode = ImageResizeMode.DownsizeAndCover,
+                ImageEditor = ImageEditors.Crop(new Size(2048, 1536), Color.White),
             });
 
-            var imagePath = _host.GetImagePath(id);
-            imagePath.Exists.ShouldBeTrue();
-
-            using (var image = Image.FromFile(imagePath.PathExport)) {
+            using (var image = Image.FromFile(_host.GetAbsoluteImagePath(id).PathExport)) {
                 image.Width.ShouldBe(1024);
                 image.Height.ShouldBe(768);
             }
 
-            var enlarged1Path = _host.GetImagePath(id, "enlarged1");
-            enlarged1Path.Exists.ShouldBeTrue();
-
-            using (var enlarged1 = Image.FromFile(enlarged1Path.PathExport)) {
+            using (var enlarged1 = Image.FromFile(_host.GetAbsoluteImagePath(id, "enlarged1").PathExport)) {
                 enlarged1.Width.ShouldBe(1024);
                 enlarged1.Height.ShouldBe(768);
             }
 
-            var enlarged2Path = _host.GetImagePath(id, "enlarged2");
-            enlarged2Path.Exists.ShouldBeTrue();
-
-            using (var enlarged2 = Image.FromFile(enlarged2Path.PathExport)) {
+            using (var enlarged2 = Image.FromFile(_host.GetAbsoluteImagePath(id, "enlarged2").PathExport)) {
                 enlarged2.Width.ShouldBe(1024);
                 enlarged2.Height.ShouldBe(768);
             }
-
-            _host.Delete(id);
-            imagePath.Exists.ShouldBeFalse();
-            enlarged1Path.Exists.ShouldBeFalse();
-            enlarged2Path.Exists.ShouldBeFalse();
         }
 
         [TestMethod]
-        public void Downsize()
+        public void MaxSize()
         {
             ResetHostingDir();
 
             using var stream = _imageFile.OpenStream();
 
             var id = _host.Add(stream, new ImageOptions() {
-                Size = new Size(500, 500),
+                ImageEditor = ImageEditors.MaxSize(new Size(500, 500), Color.White),
             });
 
             _host.AddSize(id, "thumbnail", new ImageOptions() {
-                Size = new Size(150, 150),
+                ImageEditor = ImageEditors.MaxSize(new Size(150, 150), Color.White),
             });
 
-            var imagePath = _host.GetImagePath(id);
-            imagePath.Exists.ShouldBeTrue();
-
-            using (var image = Image.FromFile(imagePath.PathExport)) {
+            using (var image = Image.FromFile(_host.GetAbsoluteImagePath(id).PathExport)) {
                 image.Width.ShouldBe(500);
                 image.Height.ShouldBe(375);
             }
 
-            var thumbnailPath = _host.GetImagePath(id, "thumbnail");
-            imagePath.Exists.ShouldBeTrue();
-
-            using (var thumbnail = Image.FromFile(thumbnailPath.PathExport)) {
+            using (var thumbnail = Image.FromFile(_host.GetAbsoluteImagePath(id, "thumbnail").PathExport)) {
                 thumbnail.Width.ShouldBe(150);
                 thumbnail.Height.ShouldBe(112);
             }
-
-            _host.Delete(id);
-            imagePath.Exists.ShouldBeFalse();
-            thumbnailPath.Exists.ShouldBeFalse();
         }
 
         [TestMethod]
-        public void DownsizeAndCover()
+        public void Crop()
         {
             ResetHostingDir();
 
             using var stream = _imageFile.OpenStream();
 
             var id = _host.Add(stream, new ImageOptions() {
-                Size = new Size(500, 500),
-                ResizeMode = ImageResizeMode.DownsizeAndCover,
+                ImageEditor = ImageEditors.Crop(new Size(500, 500), Color.White),
             });
 
             _host.AddSize(id, "thumbnail", new ImageOptions() {
-                Size = new Size(150, 150),
-                ResizeMode = ImageResizeMode.DownsizeAndCover,
+                ImageEditor = ImageEditors.Crop(new Size(150, 150), Color.White),
             });
 
-            var imagePath = _host.GetImagePath(id);
-            imagePath.Exists.ShouldBeTrue();
-
-            using (var image = Image.FromFile(imagePath.PathExport)) {
+            using (var image = Image.FromFile(_host.GetAbsoluteImagePath(id).PathExport)) {
                 image.Width.ShouldBe(500);
                 image.Height.ShouldBe(500);
             }
 
-            var thumbnailPath = _host.GetImagePath(id, "thumbnail");
-            imagePath.Exists.ShouldBeTrue();
-
-            using (var thumbnail = Image.FromFile(thumbnailPath.PathExport)) {
+            using (var thumbnail = Image.FromFile(_host.GetAbsoluteImagePath(id, "thumbnail").PathExport)) {
                 thumbnail.Width.ShouldBe(150);
                 thumbnail.Height.ShouldBe(150);
             }
+        }
+
+        [TestMethod]
+        public void Pad()
+        {
+            ResetHostingDir();
+
+            using var stream = _imageFile.OpenStream();
+
+            var id = _host.Add(stream, new ImageOptions() {
+                ImageEditor = ImageEditors.Pad(new Size(500, 500), Color.White),
+            });
+
+            _host.AddSize(id, "thumbnail", new ImageOptions() {
+                ImageEditor = ImageEditors.Pad(new Size(150, 150), Color.White),
+            });
+
+            using (var image = Image.FromFile(_host.GetAbsoluteImagePath(id).PathExport)) {
+                image.Width.ShouldBe(500);
+                image.Height.ShouldBe(500);
+            }
+
+            using (var thumbnail = Image.FromFile(_host.GetAbsoluteImagePath(id, "thumbnail").PathExport)) {
+                thumbnail.Width.ShouldBe(150);
+                thumbnail.Height.ShouldBe(150);
+            }
+        }
+
+        [TestMethod]
+        public void CreateAndDelete()
+        {
+            ResetHostingDir();
+
+            using var stream = _imageFile.OpenStream();
+
+            var id = _host.Add(stream, new ImageOptions() {
+                ImageEditor = ImageEditors.MaxSize(new Size(500, 500), Color.White),
+            });
+
+            _host.AddSize(id, "thumbnail", new ImageOptions() {
+                ImageEditor = ImageEditors.MaxSize(new Size(150, 150), Color.White),
+            });
+
+            var imagePath = _host.GetAbsoluteImagePath(id);
+            imagePath.Exists.ShouldBeTrue();
+
+            var thumbnailPath = _host.GetAbsoluteImagePath(id, "thumbnail");
+            imagePath.Exists.ShouldBeTrue();
 
             _host.Delete(id);
             imagePath.Exists.ShouldBeFalse();
             thumbnailPath.Exists.ShouldBeFalse();
+
+            imagePath.ParentDirectory.Exists.ShouldBeFalse();
+            imagePath.ParentDirectory.ParentDirectory!.Exists.ShouldBeFalse();
+            imagePath.ParentDirectory.ParentDirectory!.ParentDirectory!.Exists.ShouldBeTrue();
         }
 
         private static void ResetHostingDir()

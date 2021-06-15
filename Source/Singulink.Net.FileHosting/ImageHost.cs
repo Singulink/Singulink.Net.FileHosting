@@ -17,40 +17,42 @@ namespace Singulink.Net.FileHosting
         #region Static Fields
 
         private static readonly ImageCodecInfo _jpegEncoder = ImageCodecInfo.GetImageEncoders().First(e => e.FormatID == ImageFormat.Jpeg.Guid);
-        private static readonly ImageAttributes _imageAttributes = GetImageAttributes();
-
-        private static ImageAttributes GetImageAttributes()
-        {
-            var a = new ImageAttributes();
-            a.SetWrapMode(WrapMode.TileFlipXY); // fixes 50% transparent border
-            return a;
-        }
 
         #endregion
 
-        private readonly IAbsoluteDirectoryPath _baseDir;
+        /// <summary>
+        /// Gets the base directory that this image host uses to store files.
+        /// </summary>
+        public IAbsoluteDirectoryPath BaseDirectory { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ImageHost"/> class.
         /// </summary>
-        /// <param name="baseDir">The base path where images will be stored.</param>
-        public ImageHost(IAbsoluteDirectoryPath baseDir)
+        /// <param name="baseDirectory">The base directory path where images are stored.</param>
+        public ImageHost(IAbsoluteDirectoryPath baseDirectory)
         {
-            _baseDir = baseDir;
+            BaseDirectory = baseDirectory;
         }
 
         /// <summary>
-        /// Gets the path to an image.
+        /// Gets the absolute path to an image.
         /// </summary>
         /// <param name="guid">The ID of the image.</param>
         /// <param name="sizeId">The size identifier string, or <see langword="null"/> to get the main image.</param>
         /// <returns>The path to the image with the specified parameters, which may or may not actually exist.</returns>
-        public IAbsoluteFilePath GetImagePath(Guid guid, string? sizeId = null)
+        public IAbsoluteFilePath GetAbsoluteImagePath(Guid guid, string? sizeId = null) => BaseDirectory.Combine(GetRelativeImagePath(guid, sizeId));
+
+        /// <summary>
+        /// Gets the path to an image relative to the base directory of this image host.
+        /// </summary>
+        /// <param name="guid">The ID of the image.</param>
+        /// <param name="sizeId">The size identifier string, or <see langword="null"/> to get the main image.</param>
+        /// <returns>The relative path to the image with the specified parameters, which may or may not actually exist.</returns>
+        public IRelativeFilePath GetRelativeImagePath(Guid guid, string? sizeId = null)
         {
             string guidString = guid.ToString("N");
-            string fileName = sizeId == null ? $"{guidString}.jpg" : $"{guidString}-{sizeId}.jpg";
-
-            return GetImageDir(guidString).CombineFile(fileName);
+            string fileName = GetImageFileNamePart(guidString) + (string.IsNullOrWhiteSpace(sizeId) ? ".jpg" : $"-{sizeId.Trim()}.jpg");
+            return GetImageRelativeDir(guidString).CombineFile(fileName);
         }
 
         /// <summary>
@@ -74,13 +76,15 @@ namespace Singulink.Net.FileHosting
         /// <param name="options">The image options for the new size.</param>
         public void AddSize(Guid guid, string sizeId, ImageOptions options)
         {
-            if (options.Size == null)
-                throw new ArgumentException("A size must be specified in the options.", nameof(sizeId));
+            sizeId = sizeId.Trim();
 
             if (sizeId.Length == 0)
                 throw new ArgumentException("A size identifier is required.", nameof(sizeId));
 
-            using var stream = GetImagePath(guid, null).OpenStream(access: FileAccess.Read, share: FileShare.Read | FileShare.Delete);
+            if (options.ImageEditor == null)
+                throw new ArgumentException("No image editor specified in options.", nameof(options));
+
+            using var stream = GetAbsoluteImagePath(guid, null).OpenStream(access: FileAccess.Read, share: FileShare.Read | FileShare.Delete);
             Add(guid, sizeId, stream, options);
         }
 
@@ -92,7 +96,7 @@ namespace Singulink.Net.FileHosting
         {
             string guidString = guid.ToString("N");
             var dir = GetImageDir(guidString);
-            string searchPattern = guidString + "*.jpg";
+            string searchPattern = GetImageFileNamePart(guidString) + "*.jpg";
 
             foreach (var file in dir.GetChildFiles(searchPattern)) {
                 try {
@@ -100,6 +104,12 @@ namespace Singulink.Net.FileHosting
                 }
                 catch { }
             }
+
+            try {
+                dir.Delete();
+                dir.ParentDirectory!.Delete();
+            }
+            catch { }
         }
 
         private void Add(Guid guid, string? sizeId, Stream source, ImageOptions options)
@@ -136,127 +146,46 @@ namespace Singulink.Net.FileHosting
             }
 
             try {
-                if (options.Size is Size resize) {
-                    var resizedImage = options.ResizeMode switch {
-                        ImageResizeMode.Downsize => Downsize(image, resize.Width, resize.Height),
-                        ImageResizeMode.DownsizeAndCover => DownsizeAndCover(image, resize.Width, resize.Height),
-                        _ => throw new ArgumentOutOfRangeException(nameof(options), "Unsupported image size mode."),
-                    };
+                if (options.ImageEditor != null) {
+                    var editedImage = options.ImageEditor.ApplyEdits(image);
 
-                    if (resizedImage != null) {
+                    if (editedImage != null) {
                         image.Dispose();
-                        image = resizedImage;
+                        image = editedImage;
                     }
                 }
 
-                var path = GetImagePath(guid, sizeId);
-
-                if (sizeId == null)
-                    path.ParentDirectory.Create();
+                var path = GetAbsoluteImagePath(guid, sizeId);
 
                 var encoderParams = new EncoderParameters(1);
                 encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, options.Quality);
 
-                image.Save(path.PathExport, _jpegEncoder, encoderParams);
+                CreateDirectory:
+
+                if (string.IsNullOrWhiteSpace(sizeId))
+                    path.ParentDirectory.Create();
+
+                try {
+                    image.Save(path.PathExport, _jpegEncoder, encoderParams);
+                }
+                catch (DirectoryNotFoundException) when (string.IsNullOrWhiteSpace(sizeId)) {
+                    goto CreateDirectory; // avoid race condition for directory removal during delete prior to image saving.
+                }
             }
             finally {
                 image.Dispose();
             }
         }
 
-        private IAbsoluteDirectoryPath GetImageDir(string guidString) => _baseDir
-                .CombineDirectory(guidString.AsSpan()[0..3], PathOptions.None)
-                .CombineDirectory(guidString.AsSpan()[3..6], PathOptions.None);
+        private IAbsoluteDirectoryPath GetImageDir(string guidString) => BaseDirectory.Combine(GetImageRelativeDir(guidString));
 
-        private static Image? Downsize(Image image, int width, int height)
-        {
-            if (image.Width < width && image.Height < height)
-                return null;
+        private IRelativeDirectoryPath GetImageRelativeDir(string guidString) => DirectoryPath
+            .ParseRelative(guidString.AsSpan()[0..3], PathFormat.Universal, PathOptions.None)
+            .CombineDirectory(guidString.AsSpan()[3..6], PathOptions.None);
 
-            double shrinkByX = (double)image.Width / width;
-            double shrinkByY = (double)image.Height / height;
-
-            if (shrinkByX > shrinkByY) {
-                height = (int)(image.Height / shrinkByX);
-            }
-            else {
-                width = (int)(image.Width / shrinkByY);
-            }
-
-            var destRect = new Rectangle(0, 0, width, height);
-            var destImage = new Bitmap(width, height);
-
-            try {
-                destImage.SetResolution(image.HorizontalResolution, image.VerticalResolution);
-
-                using var graphics = Graphics.FromImage(destImage);
-                graphics.CompositingMode = CompositingMode.SourceCopy;
-                graphics.CompositingQuality = CompositingQuality.HighQuality;
-                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                graphics.SmoothingMode = SmoothingMode.HighQuality;
-                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-
-                graphics.Clear(Color.White);
-                graphics.DrawImage(image, destRect, 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, _imageAttributes);
-            }
-            catch {
-                destImage.Dispose();
-                throw;
-            }
-
-            return destImage;
-        }
-
-        private static Image? DownsizeAndCover(Image image, int width, int height)
-        {
-            double srcAspectRatio = (double)image.Width / image.Height;
-            double destAspectRatio = (double)width / height;
-
-            int srcX, srcY, srcWidth, srcHeight;
-
-            if (srcAspectRatio >= destAspectRatio) {
-                srcHeight = image.Height;
-                srcY = 0;
-                srcWidth = (int)(srcHeight * destAspectRatio);
-                srcX = (image.Width - srcWidth) / 2;
-            }
-            else {
-                srcWidth = image.Width;
-                srcX = 0;
-                srcHeight = (int)(srcWidth / destAspectRatio);
-                srcY = (image.Height - srcHeight) / 2;
-            }
-
-            if (srcWidth == width && srcHeight == height)
-                return null;
-
-            if (srcWidth < width) {
-                width = srcWidth;
-                height = srcHeight;
-            }
-
-            var destRect = new Rectangle(0, 0, width, height);
-            var destImage = new Bitmap(width, height);
-
-            try {
-                destImage.SetResolution(image.HorizontalResolution, image.VerticalResolution);
-
-                using var graphics = Graphics.FromImage(destImage);
-                graphics.CompositingMode = CompositingMode.SourceCopy;
-                graphics.CompositingQuality = CompositingQuality.HighQuality;
-                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                graphics.SmoothingMode = SmoothingMode.HighQuality;
-                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-
-                graphics.Clear(Color.White);
-                graphics.DrawImage(image, destRect, srcX, srcY, srcWidth, srcHeight, GraphicsUnit.Pixel, _imageAttributes);
-            }
-            catch {
-                destImage.Dispose();
-                throw;
-            }
-
-            return destImage;
-        }
+        /// <summary>
+        /// Gets the image file name (with no extension).
+        /// </summary>
+        private string GetImageFileNamePart(string guidString) => guidString[6..];
     }
 }

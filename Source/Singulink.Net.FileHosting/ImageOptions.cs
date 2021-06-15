@@ -17,17 +17,12 @@ namespace Singulink.Net.FileHosting
         public Func<Image, string?>? ValidateSource { get; set; }
 
         /// <summary>
-        /// Gets or sets the size of the saved image, or null to keep the current image size. Default value is <see langword="null"/>.
+        /// Gets or sets an image editor that can modify the image.
         /// </summary>
-        public Size? Size { get; set; }
+        public ImageEditor? ImageEditor { get; set; }
 
         /// <summary>
-        /// Gets or sets the resizing mode of the image if a size has been set.
-        /// </summary>
-        public ImageResizeMode ResizeMode { get; set; }
-
-        /// <summary>
-        /// Gets or sets a value that specifies the level of compression for an image if it is saved as a JPEG. The range of useful values for the quality
+        /// Gets or sets a value that specifies the level of compression for an image when it is saved in JPEG format. The range of useful values for the quality
         /// category is from 0 to 100. The lower the number specified, the higher the compression and therefore the lower the quality of the image. Zero would
         /// give you the lowest quality image and 100 the highest. Default is 75.
         /// </summary>
