@@ -44,7 +44,7 @@ namespace Singulink.Net.FileHosting
         protected virtual Graphics GetGraphics(Image image)
         {
             var graphics = Graphics.FromImage(image);
-            graphics.CompositingMode = CompositingMode.SourceCopy;
+            graphics.CompositingMode = CompositingMode.SourceOver;
             graphics.CompositingQuality = CompositingQuality.HighQuality;
             graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
             graphics.SmoothingMode = SmoothingMode.HighQuality;
