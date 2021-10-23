@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <RootNamespace>Singulink.Net.FileHosting</RootNamespace>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>0.6.2-alpha</Version>
+    <Version>0.7-alpha</Version>
     <Authors>Singulink</Authors>
     <Description>Library that facilitates file and image storage for hosting purposes.</Description>
     <Copyright>© Singulink. All rights reserved.</Copyright>

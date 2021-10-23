@@ -146,6 +146,8 @@ namespace Singulink.Net.FileHosting
             }
 
             try {
+                RotateImageByExifOrientationData(image);
+
                 if (options.ImageEditor != null) {
                     var editedImage = options.ImageEditor.ApplyEdits(image);
 
@@ -174,6 +176,43 @@ namespace Singulink.Net.FileHosting
             }
             finally {
                 image.Dispose();
+            }
+        }
+
+        private static void RotateImageByExifOrientationData(Image img)
+        {
+            int orientationId = 0x0112;
+
+            if (img.PropertyIdList.Contains(orientationId)) {
+                var pItem = img.GetPropertyItem(orientationId);
+                var fType = GetRotateFlipTypeByExifOrientationData(pItem.Value[0]);
+
+                if (fType != RotateFlipType.RotateNoneFlipNone) {
+                    img.RotateFlip(fType);
+                    img.RemovePropertyItem(orientationId);
+                }
+            }
+        }
+
+        private static RotateFlipType GetRotateFlipTypeByExifOrientationData(int orientation)
+        {
+            switch (orientation) {
+                case 2:
+                    return RotateFlipType.RotateNoneFlipX;
+                case 3:
+                    return RotateFlipType.Rotate180FlipNone;
+                case 4:
+                    return RotateFlipType.Rotate180FlipX;
+                case 5:
+                    return RotateFlipType.Rotate90FlipX;
+                case 6:
+                    return RotateFlipType.Rotate90FlipNone;
+                case 7:
+                    return RotateFlipType.Rotate270FlipX;
+                case 8:
+                    return RotateFlipType.Rotate270FlipNone;
+                default:
+                    return RotateFlipType.RotateNoneFlipNone;
             }
         }
 
